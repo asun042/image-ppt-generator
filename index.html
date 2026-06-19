@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PPT Generator - AI演讲PPT生成工具</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
+    <link rel="stylesheet" href="styles/main.css" />
+  </head>
+  <body class="bg-[#FAFAFA] text-[#0A0A0A] min-h-screen">
+    <!-- Header -->
+    <header class="sticky top-0 z-50 bg-white border-b border-[#E5E5E5]">
+      <div class="max-w-[1200px] mx-auto px-4 h-14 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <div class="w-7 h-7 bg-[#0A0A0A] rounded flex items-center justify-center">
+            <span class="text-white font-bold text-sm">P</span>
+          </div>
+          <span class="font-semibold tracking-tight">PPT Generator</span>
+        </div>
+        <!-- Step Navigation -->
+        <nav id="stepNav" class="hidden sm:flex items-center gap-1 text-sm">
+        </nav>
+        <!-- Settings Button -->
+        <button onclick="openSettings()" class="flex items-center gap-1.5 px-3 py-1.5 bg-[#0A0A0A] text-white rounded-lg text-sm font-medium hover:bg-[#262626] transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+          </svg>
+          大模型设置
+        </button>
+      </div>
+      <!-- Mobile Step Nav -->
+      <div id="stepNavMobile" class="sm:hidden flex items-center gap-1 px-4 pb-2 text-xs overflow-x-auto">
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-[1200px] mx-auto px-4 py-8">
+      <!-- Step 1: Upload -->
+      <div id="step1" class="step-content hidden">
+        <div class="mb-8">
+          <h1 class="text-2xl font-semibold tracking-tight mb-2">演讲底稿</h1>
+          <p class="text-[#525252]">上传您的演讲底稿，这是演讲的灵魂。支持 Word 文档、XMind 思维导图或直接粘贴文本。</p>
+        </div>
+        <!-- File Upload -->
+        <div class="mb-6">
+          <label class="block text-sm font-medium mb-2">演讲底稿</label>
+          <div id="uploadArea" class="border-2 border-dashed border-[#D4D4D4] rounded-lg p-8 text-center cursor-pointer hover:border-[#A3A3A3] transition-colors"
+               onclick="document.getElementById('fileInput').click()"
+               ondragover="event.preventDefault();this.classList.add('border-[#0A0A0A]')"
+               ondragleave="this.classList.remove('border-[#0A0A0A]')"
+               ondrop="handleFileDrop(event)">
+            <svg class="mx-auto h-10 w-10 text-[#A3A3A3] mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            <p class="text-sm text-[#525252] mb-1">上传文件</p>
+            <p class="text-xs text-[#A3A3A3] mb-3">支持 .docx、.xmind 格式</p>
+            <button class="px-4 py-1.5 border border-[#D4D4D4] rounded text-sm hover:bg-[#F5F5F5] transition-colors" onclick="event.stopPropagation();document.getElementById('fileInput').click()">选择文件</button>
+            <input type="file" id="fileInput" class="hidden" accept=".docx,.xmind" onchange="handleFileSelect(event)" />
+          </div>
+          <div id="uploadedFile" class="hidden mt-3 flex items-center justify-between p-3 border border-[#E5E5E5] rounded-lg bg-white">
+            <div class="flex items-center gap-2">
+              <svg class="h-5 w-5 text-[#525252]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+              <span id="fileName" class="text-sm"></span>
+            </div>
+            <button onclick="removeFile()" class="text-sm text-[#DC2626] hover:underline">移除</button>
+          </div>
+        </div>
+        <!-- Text Paste -->
+        <div class="mb-6">
+          <label class="block text-sm font-medium mb-2">或直接粘贴文本内容</label>
+          <textarea id="draftText" class="w-full h-48 p-3 border border-[#E5E5E5] rounded-lg text-sm resize-y focus:outline-none focus:border-[#0A0A0A] transition-colors bg-white" placeholder="在此粘贴演讲底稿内容..." oninput="autoSaveDraftText()"></textarea>
+          <!-- Source Toggle -->
+          <div id="sourceToggle" class="hidden mt-2">
+            <div class="inline-flex items-center gap-2">
+              <span class="text-xs text-[#737373] whitespace-nowrap">使用来源：</span>
+              <div class="inline-flex items-center bg-[#F5F5F5] rounded-full p-0.5 border border-[#E5E5E5]">
+                <button id="srcToggleFile" onclick="switchDraftSource('file')" class="px-3 py-1 text-xs rounded-full transition-colors flex items-center gap-1">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                  上传的文件
+                </button>
+                <button id="srcToggleText" onclick="switchDraftSource('text')" class="px-3 py-1 text-xs rounded-full transition-colors flex items-center gap-1">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                  手动输入的内容
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- Reference Images -->
+        <div class="mb-6">
+          <label class="block text-sm font-medium mb-2">参考图片 <span class="text-[#A3A3A3] font-normal">（可选）</span></label>
+          <p class="text-xs text-[#737373] mb-2">上传参考图片，如演讲者头像、公司Logo等</p>
+          <div class="flex flex-wrap gap-3" id="refImageContainer">
+            <div class="w-20 h-20 border-2 border-dashed border-[#D4D4D4] rounded-lg flex items-center justify-center cursor-pointer hover:border-[#A3A3A3] transition-colors" onclick="document.getElementById('refImageInput').click()">
+              <svg class="h-6 w-6 text-[#A3A3A3]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4v16m8-8H4"/></svg>
+            </div>
+            <input type="file" id="refImageInput" class="hidden" accept="image/*" multiple onchange="handleRefImageSelect(event)" />
+          </div>
+        </div>
+        <!-- Character Reference Images for consistent character generation -->
+        <div class="mb-6">
+          <label class="block text-sm font-medium mb-2">人物参考图 <span class="text-[#A3A3A3] font-normal">（可选）</span></label>
+          <p class="text-xs text-[#737373] mb-2">如果PPT有故事性，涉及人物形象，请上传人物参考图，生成的PPT图片将保持人物形象一致</p>
+          <div class="flex flex-wrap gap-3" id="characterRefContainer">
+            <div class="w-20 h-20 border-2 border-dashed border-[#D4D4D4] rounded-lg flex items-center justify-center cursor-pointer hover:border-[#A3A3A3] transition-colors" onclick="document.getElementById('characterRefInput').click()">
+              <svg class="h-6 w-6 text-[#A3A3A3]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4v16m8-8H4"/></svg>
+            </div>
+            <input type="file" id="characterRefInput" class="hidden" accept="image/*" onchange="handleCharacterRefSelect(event)" />
+          </div>
+        </div>
+        <!-- Notes -->
+        <div class="mb-8">
+          <label class="block text-sm font-medium mb-2">备注 <span class="text-[#A3A3A3] font-normal">（可选）</span></label>
+          <textarea id="draftNotes" class="w-full h-20 p-3 border border-[#E5E5E5] rounded-lg text-sm resize-y focus:outline-none focus:border-[#0A0A0A] transition-colors bg-white" placeholder="添加备注信息..."></textarea>
+        </div>
+        <!-- Next -->
+        <div class="flex justify-end">
+          <button onclick="goToStep(2)" id="step1Next" class="px-6 py-2.5 bg-[#0A0A0A] text-white rounded-lg text-sm font-medium hover:bg-[#262626] transition-colors disabled:opacity-40 disabled:cursor-not-allowed" disabled>下一步：脚本拆分</button>
+        </div>
+      </div>
+
+      <!-- Step 2: Script -->
+      <div id="step2" class="step-content hidden">
+        <div class="mb-6">
+          <h1 class="text-2xl font-semibold tracking-tight mb-2">脚本拆分</h1>
+          <p class="text-[#525252]">查看并调整演讲脚本拆分结果，支持拖拽排序、编辑和增删。</p>
+        </div>
+        <!-- Generate Button -->
+        <div id="scriptGenArea" class="mb-6">
+          <button onclick="generateScript()" id="genScriptBtn" class="px-6 py-2.5 bg-[#0A0A0A] text-white rounded-lg text-sm font-medium hover:bg-[#262626] transition-colors">生成脚本</button>
+          <span id="scriptGenStatus" class="ml-3 text-sm text-[#737373]"></span>
+        </div>
+        <!-- Debug Area for Script -->
+        <div id="scriptDebugArea" class="hidden mb-4 p-4 bg-[#FEF2F2] border border-[#FECACA] rounded-lg">
+          <p class="text-sm text-[#DC2626] font-medium mb-2">AI原始响应（用于调试）：</p>
+          <pre class="text-xs text-[#525252] whitespace-pre-wrap max-h-64 overflow-y-auto bg-white p-3 rounded border"></pre>
+        </div>
+        <!-- Script Blocks -->
+        <!-- Select Toolbar -->
+        <div id="step2-select-bar" style="display:none" class="flex items-center gap-3 mb-4 p-3 bg-[#F5F5F5] rounded-lg">
+          <input type="checkbox" id="step2-chk-all" onchange="toggleSelectAll('step2')" class="w-4 h-4 rounded border-[#D4D4D4] cursor-pointer" />
+          <span id="step2-select-count" class="text-sm text-[#525252]">已选 0 项</span>
+          <button onclick="selectAll('step2')" class="text-xs px-3 py-1 border border-[#E5E5E5] rounded hover:bg-white transition-colors">全选</button>
+          <button onclick="invertSelect('step2')" class="text-xs px-3 py-1 border border-[#E5E5E5] rounded hover:bg-white transition-colors">反选</button>
+          <button onclick="deselectAll('step2')" class="text-xs px-3 py-1 border border-[#E5E5E5] rounded hover:bg-white transition-colors">取消选择</button>
+          <div class="flex-1"></div>
+          <button onclick="batchDeleteScriptBlocks()" class="text-xs px-3 py-1 bg-[#DC2626] text-white rounded hover:bg-[#B91C1C] transition-colors">删除选中</button>
+        </div>
+        <div id="scriptBlocks" class="space-y-3 mb-8">
+        </div>
+        <!-- Script Edit Modal -->
+        <div id="scriptEditModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div class="bg-white rounded-xl shadow-lg w-full max-w-2xl mx-4 p-6">
+            <h3 id="scriptEditTitle" class="text-lg font-semibold mb-3"></h3>
+            <textarea id="scriptEditTextarea" class="w-full h-80 border border-[#E5E5E5] rounded-lg p-3 text-sm font-mono resize-y focus:outline-none focus:border-[#0A0A0A]" placeholder="编辑页面内容..."></textarea>
+            <div class="flex justify-end gap-3 mt-4">
+              <button onclick="cancelScriptEdit()" class="px-4 py-2 text-sm border border-[#E5E5E5] rounded-lg hover:bg-[#F5F5F5]">取消</button>
+              <button onclick="saveScriptEdit()" class="px-4 py-2 text-sm bg-[#0A0A0A] text-white rounded-lg hover:bg-[#262626]">保存</button>
+            </div>
+          </div>
+        </div>
+        <!-- Add Block -->
+        <div id="addBlockArea" class="hidden mb-8">
+          <button onclick="addScriptBlock()" class="w-full py-3 border-2 border-dashed border-[#D4D4D4] rounded-lg text-sm text-[#737373] hover:border-[#A3A3A3] hover:text-[#525252] transition-colors">+ 添加页面</button>
+        </div>
+        <!-- Navigation -->
+        <div class="flex justify-between">
+          <button onclick="goToStep(1)" class="px-6 py-2.5 border border-[#E5E5E5] rounded-lg text-sm hover:bg-[#F5F5F5] transition-colors">上一步</button>
+          <button onclick="goToStep(3)" id="step2Next" class="px-6 py-2.5 bg-[#0A0A0A] text-white rounded-lg text-sm font-medium hover:bg-[#262626] transition-colors disabled:opacity-40 disabled:cursor-not-allowed" disabled>下一步：设计稿</button>
+        </div>
+      </div>
+
+      <!-- Step 3: Design -->
+      <div id="step3" class="step-content hidden">
+        <div class="mb-6">
+          <h1 class="text-2xl font-semibold tracking-tight mb-2">设计稿</h1>
+          <p class="text-[#525252]">查看并调整每页PPT的设计思路和全局设计语言。</p>
+        </div>
+        <!-- Design Language -->
+        <div class="mb-6 p-5 border border-[#E5E5E5] rounded-lg bg-white">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="font-medium">整体设计语言 <span class="ml-2 text-xs text-[#A3A3A3] font-normal">参考模板</span></h3>
+            <div class="flex items-center gap-2">
+              <button onclick="toggleDesignLangEdit()" id="designLangEditBtn" class="text-sm text-[#2563EB] hover:underline">编辑</button>
+              <button onclick="resetDesignLanguage()" id="resetDesignLangBtn" class="text-sm text-[#DC2626] hover:underline">重置</button>
+            </div>
+          </div>
+          <div class="mb-3 flex items-center gap-3">
+            <button onclick="generateDesignLanguage()" id="genDesignLangBtn" class="px-4 py-2 bg-[#0A0A0A] text-white rounded-lg text-sm font-medium hover:bg-[#262626] transition-colors">适配PPT · 生成设计语言</button>
+            <span id="designLangGenStatus" class="text-sm text-[#737373]"></span>
+          </div>
+          <div id="designLangView" class="text-sm text-[#525252] whitespace-pre-wrap"></div>
+          <textarea id="designLangEdit" class="hidden w-full h-64 p-3 border border-[#E5E5E5] rounded-lg text-sm resize-y focus:outline-none focus:border-[#0A0A0A]"></textarea>
+        </div>
+        <!-- Generate Design -->
+        <div class="mb-6 flex items-center gap-3">
+          <button onclick="generateDesign()" id="genDesignBtn" class="px-6 py-2.5 bg-[#0A0A0A] text-white rounded-lg text-sm font-medium hover:bg-[#262626] transition-colors">生成设计稿</button>
+          <button onclick="openImportDesignModal()" class="px-4 py-2.5 border border-[#E5E5E5] rounded-lg text-sm font-medium hover:bg-[#FAFAFA] transition-colors">导入设计稿</button>
+          <span id="designGenStatus" class="text-sm text-[#737373]"></span>
+        </div>
+        <!-- Debug Area for Design -->
+        <div id="designDebugArea" class="hidden mb-4 p-4 bg-[#FEF2F2] border border-[#FECACA] rounded-lg">
+          <p class="text-sm text-[#DC2626] font-medium mb-2">AI原始响应（用于调试）：</p>
+          <pre class="text-xs text-[#525252] whitespace-pre-wrap max-h-64 overflow-y-auto bg-white p-3 rounded border"></pre>
+        </div>
+        <!-- Design Blocks -->
+        <!-- Select Toolbar -->
+        <div id="step3-select-bar" style="display:none" class="flex items-center gap-3 mb-4 p-3 bg-[#F5F5F5] rounded-lg">
+          <input type="checkbox" id="step3-chk-all" onchange="toggleSelectAll('step3')" class="w-4 h-4 rounded border-[#D4D4D4] cursor-pointer" />
+          <span id="step3-select-count" class="text-sm text-[#525252]">已选 0 项</span>
+          <button onclick="selectAll('step3')" class="text-xs px-3 py-1 border border-[#E5E5E5] rounded hover:bg-white transition-colors">全选</button>
+          <button onclick="invertSelect('step3')" class="text-xs px-3 py-1 border border-[#E5E5E5] rounded hover:bg-white transition-colors">反选</button>
+          <button onclick="deselectAll('step3')" class="text-xs px-3 py-1 border border-[#E5E5E5] rounded hover:bg-white transition-colors">取消选择</button>
+          <div class="flex-1"></div>
+          <button onclick="batchDeleteDesignBlocks()" class="text-xs px-3 py-1 bg-[#DC2626] text-white rounded hover:bg-[#B91C1C] transition-colors">删除选中</button>
+        </div>
+        <div id="designBlocks" class="space-y-3 mb-8">        </div>
+        <!-- Navigation -->
+        <div class="flex justify-between">
+          <button onclick="goToStep(2)" class="px-6 py-2.5 border border-[#E5E5E5] rounded-lg text-sm hover:bg-[#F5F5F5] transition-colors">上一步</button>
+          <button onclick="goToStep(4)" id="step3Next" class="px-6 py-2.5 bg-[#0A0A0A] text-white rounded-lg text-sm font-medium hover:bg-[#262626] transition-colors disabled:opacity-40 disabled:cursor-not-allowed" disabled>下一步：图片生成</button>
+        </div>
+      </div>
+
+      <!-- Step 4: Image Generation -->
+      <div id="step4" class="step-content hidden">
+        <div class="mb-6">
+          <h1 class="text-2xl font-semibold tracking-tight mb-2">图片生成</h1>
+          <p class="text-[#525252]">AI生成PPT图片，可逐页调整和重新生成。</p>
+        </div>
+        <!-- Generate All -->
+        <div class="mb-6">
+          <button onclick="generateAllImages()" id="genImagesBtn" class="px-6 py-2.5 bg-[#0A0A0A] text-white rounded-lg text-sm font-medium hover:bg-[#262626] transition-colors">生成全部图片</button>
+          <span id="imageGenStatus" class="ml-3 text-sm text-[#737373]"></span>
+        </div>
+        <!-- Image Blocks -->
+        <!-- Select Toolbar -->
+        <div id="step4-select-bar" style="display:none" class="flex items-center gap-3 mb-4 p-3 bg-[#F5F5F5] rounded-lg">
+          <input type="checkbox" id="step4-chk-all" onchange="toggleSelectAll('step4')" class="w-4 h-4 rounded border-[#D4D4D4] cursor-pointer" />
+          <span id="step4-select-count" class="text-sm text-[#525252]">已选 0 项</span>
+          <button onclick="selectAll('step4')" class="text-xs px-3 py-1 border border-[#E5E5E5] rounded hover:bg-white transition-colors">全选</button>
+          <button onclick="invertSelect('step4')" class="text-xs px-3 py-1 border border-[#E5E5E5] rounded hover:bg-white transition-colors">反选</button>
+          <button onclick="deselectAll('step4')" class="text-xs px-3 py-1 border border-[#E5E5E5] rounded hover:bg-white transition-colors">取消选择</button>
+          <div class="flex-1"></div>
+          <button onclick="batchGenerateImages()" class="text-xs px-3 py-1 bg-[#0A0A0A] text-white rounded hover:bg-[#262626] transition-colors">生成选中</button>
+          <button onclick="batchConfirmImages()" class="text-xs px-3 py-1 border border-[#16A34A] text-[#16A34A] rounded hover:bg-[#16A34A] hover:text-white transition-colors">确认选中</button>
+          <button onclick="batchDeleteImages()" class="text-xs px-3 py-1 border border-[#DC2626] text-[#DC2626] rounded hover:bg-[#DC2626] hover:text-white transition-colors">删除选中</button>
+        </div>
+        <div id="imageBlocks" class="space-y-4 mb-8">
+        </div>
+        <!-- Navigation -->
+        <div class="flex justify-between">
+          <button onclick="goToStep(3)" class="px-6 py-2.5 border border-[#E5E5E5] rounded-lg text-sm hover:bg-[#F5F5F5] transition-colors">上一步</button>
+          <button onclick="goToStep(5)" id="step4Next" class="px-6 py-2.5 bg-[#0A0A0A] text-white rounded-lg text-sm font-medium hover:bg-[#262626] transition-colors disabled:opacity-40 disabled:cursor-not-allowed" disabled>下一步：导出下载</button>
+        </div>
+      </div>
+
+      <!-- Step 5: Export -->
+      <div id="step5" class="step-content hidden">
+        <div class="mb-6">
+          <h1 class="text-2xl font-semibold tracking-tight mb-2">导出下载</h1>
+          <p class="text-[#525252]">将PPT图片拼接为PPTX文件，包含演讲备注。</p>
+        </div>
+        <!-- Export Options -->
+        <div class="space-y-4 mb-8">
+          <div class="p-5 border border-[#E5E5E5] rounded-lg bg-white">
+            <h3 class="font-medium mb-2">PPTX 带演讲备注</h3>
+            <p class="text-sm text-[#737373] mb-4">每页PPT包含详细演讲备注，方便演讲时参考。</p>
+            <button onclick="exportPPTX(true)" id="exportWithNotes" class="px-6 py-2.5 bg-[#0A0A0A] text-white rounded-lg text-sm font-medium hover:bg-[#262626] transition-colors">下载（含备注）</button>
+          </div>
+          <div class="p-5 border border-[#E5E5E5] rounded-lg bg-white">
+            <h3 class="font-medium mb-2">PPTX 无演讲备注</h3>
+            <p class="text-sm text-[#737373] mb-4">纯净版PPT，适合分享和展示。</p>
+            <button onclick="exportPPTX(false)" id="exportNoNotes" class="px-6 py-2.5 border border-[#0A0A0A] text-[#0A0A0A] rounded-lg text-sm font-medium hover:bg-[#F5F5F5] transition-colors">下载（无备注）</button>
+          </div>
+        </div>
+        <div id="exportStatus" class="text-sm text-[#737373] mb-8"></div>
+        <!-- Navigation -->
+        <div class="flex justify-start">
+          <button onclick="goToStep(4)" class="px-6 py-2.5 border border-[#E5E5E5] rounded-lg text-sm hover:bg-[#F5F5F5] transition-colors">上一步</button>
+        </div>
+      </div>
+    </main>
+
+    <!-- Design Edit Modal -->
+    <div id="designEditModal" class="hidden fixed inset-0 z-[100] bg-black/30 flex items-center justify-center p-4">
+      <div class="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between p-5 border-b border-[#E5E5E5]">
+          <h2 id="designEditTitle" class="font-semibold text-lg">编辑设计稿</h2>
+          <button onclick="cancelDesignEdit()" class="text-[#737373] hover:text-[#0A0A0A]">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div class="p-5">
+          <textarea id="designEditTextarea" class="w-full h-[60vh] p-3 border border-[#E5E5E5] rounded-lg text-sm font-mono resize-none focus:outline-none focus:border-[#0A0A0A]" placeholder="编辑设计稿内容..."></textarea>
+        </div>
+        <div class="flex justify-end gap-3 p-5 border-t border-[#E5E5E5]">
+          <button onclick="cancelDesignEdit()" class="px-4 py-2 text-sm border border-[#E5E5E5] rounded-lg hover:bg-[#FAFAFA]">取消</button>
+          <button onclick="saveDesignEdit()" class="px-4 py-2 text-sm bg-[#0A0A0A] text-white rounded-lg hover:bg-[#171717]">保存</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Import Design Modal -->
+    <div id="importDesignModal" class="hidden fixed inset-0 z-[100] bg-black/30 flex items-center justify-center p-4">
+      <div class="bg-white rounded-lg w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between p-5 border-b border-[#E5E5E5]">
+          <div>
+            <h2 class="font-semibold text-lg">导入设计稿</h2>
+            <p class="text-sm text-[#737373] mt-1">粘贴完整的设计稿内容，AI将自动拆分为多页</p>
+          </div>
+          <button onclick="closeImportDesignModal()" class="text-[#737373] hover:text-[#0A0A0A]">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div class="p-5">
+          <div class="mb-4">
+            <label class="block text-sm font-medium mb-2">整体设计语言（可选）</label>
+            <textarea id="importDesignLang" class="w-full h-32 p-3 border border-[#E5E5E5] rounded-lg text-sm resize-y focus:outline-none focus:border-[#0A0A0A]" placeholder="如果设计稿中包含整体设计语言，可粘贴在此处，或留空使用默认值..."></textarea>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-2">完整设计稿内容 <span class="text-[#DC2626]">*</span></label>
+            <textarea id="importDesignContent" class="w-full h-[40vh] p-3 border border-[#E5E5E5] rounded-lg text-sm font-mono resize-none focus:outline-none focus:border-[#0A0A0A]" placeholder="粘贴完整的设计稿内容...
+
+支持格式示例：
+第1页 - 标题页
+标题：xxx
+金句：xxx
+视觉设计：xxx
+配图提示词：xxx
+
+第2页 - 章节页
+标题：xxx
+...
+
+或任何其他清晰分页的格式"></textarea>
+          </div>
+        </div>
+        <div class="flex justify-end gap-3 p-5 border-t border-[#E5E5E5]">
+          <button onclick="closeImportDesignModal()" class="px-4 py-2 text-sm border border-[#E5E5E5] rounded-lg hover:bg-[#FAFAFA]">取消</button>
+          <button onclick="importDesignBlocks()" class="px-4 py-2 text-sm bg-[#0A0A0A] text-white rounded-lg hover:bg-[#171717]">导入并拆分</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="hidden fixed inset-0 z-[100] bg-black/30 flex items-center justify-center p-4">
+      <div class="bg-white rounded-lg w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between p-5 border-b border-[#E5E5E5]">
+          <div class="flex items-center gap-2">
+            <h2 class="font-semibold text-lg">API 设置</h2>
+            <span id="modeIndicator" class="text-xs px-2 py-0.5 rounded border border-[#E5E5E5] text-[#737373]"></span>
+          </div>
+          <button onclick="closeSettings()" class="text-[#737373] hover:text-[#0A0A0A] text-xl">&times;</button>
+        </div>
+        <div class="p-5 space-y-6">
+          <!-- Text LLM API -->
+          <div>
+            <h3 class="font-medium mb-3">文字生成 API</h3>
+            <p class="text-xs text-[#737373] mb-3">用于脚本拆分和设计稿生成</p>
+            <div class="space-y-3">
+              <div>
+                <label class="block text-sm mb-1">API 格式</label>
+                <select id="cfgTextApiFormat" class="w-full px-3 py-2 border border-[#E5E5E5] rounded text-sm focus:outline-none focus:border-[#0A0A0A] bg-white">
+                  <option value="openai">OpenAI 兼容格式（/v1/chat/completions）</option>
+                  <option value="anthropic">Anthropic 格式（/v1/messages）</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm mb-1">Base URL</label>
+                <input id="cfgTextBaseUrl" type="text" class="w-full px-3 py-2 border border-[#E5E5E5] rounded text-sm focus:outline-none focus:border-[#0A0A0A]" placeholder="https://api.openai.com" />
+              </div>
+              <div>
+                <label class="block text-sm mb-1">API Key</label>
+                <input id="cfgTextApiKey" type="password" class="w-full px-3 py-2 border border-[#E5E5E5] rounded text-sm focus:outline-none focus:border-[#0A0A0A]" placeholder="sk-..." />
+              </div>
+              <div>
+                <label class="block text-sm mb-1">模型名称</label>
+                <input id="cfgTextModel" type="text" class="w-full px-3 py-2 border border-[#E5E5E5] rounded text-sm focus:outline-none focus:border-[#0A0A0A]" placeholder="gpt-4o / claude-sonnet-4-20250514" />
+              </div>
+            </div>
+          </div>
+          <!-- Image Generation API -->
+          <div>
+            <h3 class="font-medium mb-3">图片生成 API</h3>
+            <p class="text-xs text-[#737373] mb-3">用于生成PPT页面图片</p>
+            <div class="space-y-3">
+              <div>
+                <label class="block text-sm mb-1">API 类型</label>
+                <select id="cfgImageApiType" class="w-full px-3 py-2 border border-[#E5E5E5] rounded text-sm focus:outline-none focus:border-[#0A0A0A] bg-white">
+                  <option value="chat">Chat Completions（/v1/chat/completions）</option>
+                  <option value="images">Images Generations（/v1/images/generations）</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm mb-1">Base URL</label>
+                <input id="cfgImageBaseUrl" type="text" class="w-full px-3 py-2 border border-[#E5E5E5] rounded text-sm focus:outline-none focus:border-[#0A0A0A]" placeholder="https://api.openai.com" />
+              </div>
+              <div>
+                <label class="block text-sm mb-1">API Key</label>
+                <input id="cfgImageApiKey" type="password" class="w-full px-3 py-2 border border-[#E5E5E5] rounded text-sm focus:outline-none focus:border-[#0A0A0A]" placeholder="sk-..." />
+              </div>
+              <div>
+                <label class="block text-sm mb-1">模型名称</label>
+                <input id="cfgImageModel" type="text" class="w-full px-3 py-2 border border-[#E5E5E5] rounded text-sm focus:outline-none focus:border-[#0A0A0A]" placeholder="gpt-image-2 / dall-e-3" />
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="p-5 border-t border-[#E5E5E5] flex justify-end gap-3">
+          <button onclick="closeSettings()" class="px-4 py-2 border border-[#E5E5E5] rounded text-sm hover:bg-[#F5F5F5] transition-colors">取消</button>
+          <button onclick="saveSettings()" class="px-4 py-2 bg-[#0A0A0A] text-white rounded text-sm font-medium hover:bg-[#262626] transition-colors">保存</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Image Edit Modal -->
+    <div id="imageEditModal" class="hidden fixed inset-0 z-[100] bg-black/30 flex items-center justify-center p-4">
+      <div class="bg-white rounded-lg w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between p-5 border-b border-[#E5E5E5]">
+          <h2 class="font-semibold text-lg">编辑图片 - <span id="imageEditTitle"></span></h2>
+          <button onclick="closeImageEdit()" class="text-[#737373] hover:text-[#0A0A0A] text-xl">&times;</button>
+        </div>
+        <div class="p-5 flex gap-5 flex-col md:flex-row">
+          <!-- Current Image -->
+          <div class="flex-1">
+            <h3 class="text-sm font-medium mb-2">当前图片</h3>
+            <div class="border border-[#E5E5E5] rounded-lg overflow-hidden bg-[#F5F5F5]">
+              <img id="imageEditPreview" class="w-full" alt="当前图片" />
+            </div>
+          </div>
+          <!-- Chat Panel -->
+          <div class="w-full md:w-80 flex flex-col">
+            <h3 class="text-sm font-medium mb-2">调整提示词</h3>
+            <div id="imageEditChat" class="flex-1 h-64 overflow-y-auto border border-[#E5E5E5] rounded-lg p-3 mb-3 text-sm space-y-2 bg-[#FAFAFA]">
+            </div>
+            <div class="flex gap-2">
+              <input id="imageEditInput" type="text" class="flex-1 px-3 py-2 border border-[#E5E5E5] rounded text-sm focus:outline-none focus:border-[#0A0A0A]" placeholder="输入调整要求..." onkeydown="if(event.key==='Enter')regenerateImage()" />
+              <button onclick="regenerateImage()" class="px-4 py-2 bg-[#0A0A0A] text-white rounded text-sm hover:bg-[#262626] transition-colors">生成</button>
+            </div>
+            <div class="flex gap-2 mt-3">
+              <button onclick="confirmImageEdit()" class="flex-1 px-4 py-2 bg-[#16A34A] text-white rounded text-sm font-medium hover:bg-[#15803D] transition-colors">确认使用</button>
+              <button onclick="closeImageEdit()" class="px-4 py-2 border border-[#E5E5E5] rounded text-sm hover:bg-[#F5F5F5] transition-colors">取消</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-[200] px-5 py-3 rounded-lg text-sm font-medium shadow-lg"></div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

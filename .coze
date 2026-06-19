@@ -1,0 +1,14 @@
+[project]
+entrypoint = "index.html"
+requires = [ "nodejs-24" ]
+template = "native-static"
+version = "0.0.27"
+appliedPatches = [ ]
+
+[dev]
+build = [ ]
+run = [ "node", "server.js" ]
+
+[deploy]
+build = [ ]
+run = [ "node", "server.js" ]
