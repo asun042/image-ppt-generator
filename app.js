@@ -38,6 +38,8 @@ const DEFAULT_DESIGN_LANG = `视觉关键词
 // ---- 参考图内存备份（防异步时序问题）----
 let __charRefImagesBackup = [];
 let __refImagesBackup = [];
+let __promptEditorOpen = new Set();  // 已展开的提示词编辑器
+
 let __stepTransitioning = false;  // 步骤切换中标志，阻止 oninput 干扰
 
 let state = {
@@ -768,7 +770,7 @@ async function callTextAPI(messages) {
   }
 }
 
-async function callImageAPI(prompt, refImages = []) {
+async function callImageAPI(prompt, refImages = [], currentImage = null) {
   const cfg = getConfig().imageApi;
   if (!cfg.baseUrl || !cfg.apiKey || !cfg.model) {
     throw new Error('请先在设置中配置图片生成API');
@@ -2061,6 +2063,10 @@ function extractVisualStyle(designLang) {
 
 function buildSlidePrompt(designBlock, scriptBlock) {
   const parts = [];
+  // 检查设计语言中是否有"不要标题"的指示
+  const designLangFull = state.design.designLanguage || '';
+  const noTitleKw = ['不要标题', '不需要标题', '不需要显示标题', 'no title', 'no titles', '无标题', '没有标题'];
+  const suppressTitle = noTitleKw.some(function(kw) { return designLangFull.includes(kw); });
   
   // Core instruction: generate based on design spec, respect content type
   parts.push(`Generate a complete, fully rendered presentation slide image (16:9 aspect ratio).
@@ -2080,9 +2086,9 @@ function buildSlidePrompt(designBlock, scriptBlock) {
     parts.push('\n\n【视觉风格/整体设计语言】\n' + designLang);
   }
   
-  // Title - only if exists in designBlock
+  // Title - only if exists in designBlock AND design language allows it
   const title = designBlock?.title;
-  if (title) {
+  if (title && !suppressTitle) {
     parts.push('\n\nSlide Title (render this as the main heading): ' + title);
   }
   
@@ -2101,11 +2107,6 @@ function buildSlidePrompt(designBlock, scriptBlock) {
     parts.push('\n【配图提示词】\n' + designBlock.imagePrompt);
   }
   
-  // Script content for context (limited to avoid mixing other pages' content)
-  if (scriptBlock?.content) {
-    const snippet = scriptBlock.content.substring(0, 150);
-    parts.push('\n[演讲内容片段]: ' + snippet);
-  }
   
   parts.push('\n\n【最终检查】\n1. 是否严格遵循了【视觉设计】和【配图提示词】？\n2. 如果有标题/金句，是否正确渲染了中文文字？\n3. 如果设计语言说"不要标题"，图片中是否没有标题？\n4. 这是一张完整的PPT页面，不是只有背景\n5. 只包含本页内容，不要混入其他页面的内容');
   
@@ -2209,6 +2210,16 @@ function renderImageBlocks() {
           ${item.error ? '<span class="text-[#DC2626]">' + escapeHtml(item.error) + '</span>' : '未生成'}
         </div>
       `}
+      <div class="mt-2">
+        <button onclick="togglePromptEditor(${idx})" id="prompt-btn-${idx}" class="text-xs text-[#2563EB] hover:underline">▸ 展开提示词</button>
+      </div>
+      <div id="prompt-editor-${idx}" class="hidden mt-2">
+        <textarea id="prompt-textarea-${idx}" class="w-full h-32 p-2 border border-[#E5E5E5] rounded text-xs font-mono resize-y focus:outline-none focus:border-[#0A0A0A] bg-white">${escapeHtml(item.prompt || '')}</textarea>
+        <div class="flex items-center gap-2 mt-2">
+          <button onclick="updateImagePrompt(${idx})" class="px-3 py-1 bg-[#0A0A0A] text-white rounded text-xs hover:bg-[#262626] transition-colors">更新</button>
+          <button onclick="resetImagePrompt(${idx})" class="px-3 py-1 border border-[#E5E5E5] rounded text-xs hover:bg-[#F5F5F5] transition-colors">重置为设计稿</button>
+        </div>
+      </div>
       <div class="text-xs text-[#737373] mt-1">
         <span class="font-medium">标题:</span> ${escapeHtml(designBlock?.title || '-')}
         ${designBlock?.goldenSentence ? ' &middot; <span class="font-medium">金句:</span> ' + escapeHtml(designBlock.goldenSentence.substring(0, 60)) : ''}
@@ -2224,17 +2235,20 @@ function renderImageBlocks() {
 // Build a complete PPT page prompt from design block info
 async function generateSingleImage(idx) {
   const item = state.images.items[idx];
-  const designBlock = state.design.blocks[idx];
-  const scriptBlock = state.script.blocks[idx];
-  const prompt = buildSlidePrompt(designBlock, scriptBlock);
-
-  // Save the full prompt for display
-  item.prompt = prompt;
+  
+  // 首次生成或重置后才重建提示词；用户手动更新过则保留
+  if (!item.prompt) {
+    const designBlock = state.design.blocks[idx];
+    const scriptBlock = state.script.blocks[idx];
+    item.prompt = buildSlidePrompt(designBlock, scriptBlock);
+  }
+  
   item.error = '';
   renderImageBlocks();
 
   try {
-    let imageUrl = await callImageAPI(prompt, state.characterRefImages);
+    var promptToUse = item.prompt || buildSlidePrompt(state.design.blocks[idx], state.script.blocks[idx]);
+    let imageUrl = await callImageAPI(promptToUse, state.characterRefImages);
     // Immediately convert remote URL to base64 for reliable PPTX export
     if (!imageUrl.startsWith('data:')) {
       try {
@@ -2316,6 +2330,46 @@ async function generateAllImages() {
   }
 }
 
+// ---- 提示词编辑（图片生成环节）----
+function togglePromptEditor(idx) {
+  var el = document.getElementById('prompt-editor-' + idx);
+  var btn = document.getElementById('prompt-btn-' + idx);
+  if (!el || !btn) return;
+  if (el.classList.contains('hidden')) {
+    el.classList.remove('hidden');
+    __promptEditorOpen.add(idx);
+    btn.textContent = '▖ 收起提示词';
+    // 同步最新的 prompt 到文本框
+    var ta = document.getElementById('prompt-textarea-' + idx);
+    if (ta) ta.value = state.images.items[idx]?.prompt || '';
+  } else {
+    el.classList.add('hidden');
+    __promptEditorOpen.delete(idx);
+    btn.textContent = '▸ 展开提示词';
+  }
+}
+
+function updateImagePrompt(idx) {
+  var ta = document.getElementById('prompt-textarea-' + idx);
+  if (!ta) return;
+  state.images.items[idx].prompt = ta.value;
+  saveState();
+  showToast('提示词已更新', 'success');
+}
+
+function resetImagePrompt(idx) {
+  var item = state.images.items[idx];
+  var designBlock = state.design.blocks[idx];
+  var scriptBlock = state.script.blocks[idx];
+  if (!designBlock) return;
+  item.prompt = buildSlidePrompt(designBlock, scriptBlock);
+  saveState();
+  // 同步刷新文本域
+  var ta = document.getElementById('prompt-textarea-' + idx);
+  if (ta) ta.value = item.prompt;
+  showToast('已重置为设计稿版本', 'info');
+}
+
 function confirmImage(idx) {
   state.images.items[idx].confirmed = true;
   state.images.generated = state.images.items.every(item => item.confirmed);
@@ -2358,12 +2412,16 @@ async function regenerateImage() {
   const designBlock = state.design.blocks[currentEditIdx];
   const scriptBlock = state.script.blocks[currentEditIdx];
   const basePrompt = buildSlidePrompt(designBlock, scriptBlock);
-  const newPrompt = basePrompt + '\n\nAdditional user adjustment: ' + userMsg;
+  // 编辑模式下：提供原图作为参考，要求 AI 在原图基础上局部修改
+  const newPrompt = '【编辑模式】请基于上方提供的当前图片进行修改。\n' +
+    '只修改用户指定的元素，保持其他所有元素的构图、布局、配色、文字内容完全不变。\n\n' +
+    '原始设计参考（用于理解设计意图）：\n' + basePrompt + '\n\n' +
+    '用户修改要求：\n' + userMsg;
 
   chat.innerHTML += '<div class="text-[#737373]">生成中...</div>';
 
   try {
-    let imageUrl = await callImageAPI(newPrompt, state.characterRefImages);
+    let imageUrl = await callImageAPI(newPrompt, state.characterRefImages, tempImageUrl);
     // Convert remote URL to base64 via proxy for reliable preview & export
     if (!imageUrl.startsWith('data:')) {
       try {
