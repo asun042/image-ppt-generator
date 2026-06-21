@@ -2297,26 +2297,37 @@ async function generateSingleImage(idx) {
       try {
         if (isProxyMode()) {
           // 代理模式：通过服务端下载图片转base64
-          const dlResp = await fetch('/api/download-image', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ imageUrl }),
-          });
-          if (dlResp.ok) {
-            const dlData = await dlResp.json();
-            if (dlData.dataUrl) {
-              imageUrl = dlData.dataUrl;
+          try {
+            const dlResp = await fetch('/api/download-image', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ imageUrl }),
+            });
+            if (dlResp.ok) {
+              const dlData = await dlResp.json();
+              if (dlData.dataUrl) {
+                imageUrl = dlData.dataUrl;
+              }
             }
+          } catch (e) {
+            console.warn('Proxy download failed, trying Canvas:', e);
           }
-        } else {
-          // 纯静态模式：直接fetch图片（需要API支持CORS）
-          const resp = await fetch(imageUrl);
-          const blob = await resp.blob();
-          imageUrl = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result);
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
+        }
+        // Canvas-based fallback (works regardless of proxy/static mode)
+        if (!imageUrl.startsWith('data:')) {
+          imageUrl = await new Promise(function(resolve, reject) {
+            var img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = function() {
+              var canvas = document.createElement('canvas');
+              canvas.width = img.naturalWidth;
+              canvas.height = img.naturalHeight;
+              var ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0);
+              resolve(canvas.toDataURL('image/jpeg', 0.92));
+            };
+            img.onerror = function() { reject(new Error('Image load failed')); };
+            img.src = imageUrl;
           });
         }
       } catch (e) {
@@ -2597,25 +2608,50 @@ async function exportPPTX(withNotes) {
         }
       }
 
-      // If still a remote URL (shouldn't happen), try proxy download
+      // If still a remote URL, convert to base64 via Canvas
       if (imgData && !imgData.startsWith('data:')) {
         try {
           statusEl.textContent = `正在下载第 ${i+1}/${state.images.items.length} 页图片...`;
-          const dlResp = await fetch('/api/download-image', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ imageUrl: imgData }),
-          });
-          if (dlResp.ok) {
-            const dlData = await dlResp.json();
-            if (dlData.dataUrl) {
-              imgData = dlData.dataUrl;
-              item.imageBase64 = imgData;
-              item.imageUrl = '';
+          // Try proxy first
+          let downloaded = false;
+          try {
+            const dlResp = await fetch('/api/download-image', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ imageUrl: imgData }),
+            });
+            if (dlResp.ok) {
+              const dlData = await dlResp.json();
+              if (dlData.dataUrl) {
+                imgData = dlData.dataUrl;
+                downloaded = true;
+              }
             }
+          } catch (e) {
+            console.warn('Proxy download failed, trying direct Canvas fetch:', e);
           }
+          // Fallback: direct Canvas-based conversion
+          if (!downloaded) {
+            imgData = await new Promise(function(resolve, reject) {
+              var img = new Image();
+              img.crossOrigin = 'anonymous';
+              img.onload = function() {
+                var canvas = document.createElement('canvas');
+                canvas.width = img.naturalWidth;
+                canvas.height = img.naturalHeight;
+                var ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                resolve(canvas.toDataURL('image/jpeg', 0.92));
+              };
+              img.onerror = function() { reject(new Error('Image load failed')); };
+              img.src = imgData;
+            });
+          }
+          // Store back for future use
+          item.imageBase64 = imgData;
+          item.imageUrl = '';
         } catch (e) {
-          console.warn('Failed to download image via proxy:', e);
+          console.warn('Failed to convert remote image to base64:', e);
         }
       }
 
