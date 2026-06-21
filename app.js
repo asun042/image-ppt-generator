@@ -785,34 +785,49 @@ async function callImageAPI(prompt, refImages = [], currentImage = null) {
     
     // Build message content - support reference images for consistent character generation
     let messageContent;
-    if (refImages && refImages.length > 0) {
-      // Multi-modal content with reference images
+    if (refImages && refImages.length > 0 || currentImage) {
+      // Multi-modal content with images + text
       messageContent = [];
-      // Add reference images first (OpenAI format: type: 'image_url')
-      for (const refImg of refImages) {
-        const imgData = refImg.data || refImg;
-        if (imgData.startsWith('data:')) {
-          // Base64 data URL
-          messageContent.push({
-            type: 'image_url',
-            image_url: { url: imgData }
-          });
-        } else if (imgData.startsWith('http')) {
-          // HTTP URL
-          messageContent.push({
-            type: 'image_url',
-            image_url: { url: imgData }
-          });
-        }
-      }
-      // Add text prompt (OpenAI format: type: 'text')
+      // Text prompt FIRST (per API docs: text before images)
       messageContent.push({
         type: 'text',
         text: prompt
       });
+      // Add current image (if editing) for targeted modification
+      if (currentImage) {
+        messageContent.push({
+          type: 'image_url',
+          image_url: { url: currentImage }
+        });
+      }
+      // Add character reference images
+      if (refImages && refImages.length > 0) {
+        for (const refImg of refImages) {
+          const imgData = refImg.data || refImg;
+          if (imgData.startsWith('data:')) {
+            messageContent.push({
+              type: 'image_url',
+              image_url: { url: imgData }
+            });
+          } else if (imgData.startsWith('http')) {
+            messageContent.push({
+              type: 'image_url',
+              image_url: { url: imgData }
+            });
+          }
+        }
+      }
     } else {
-      // Text-only content
-      messageContent = prompt;
+      // Text-only content (must be array for gpt-image-2)
+      messageContent = [{ type: 'text', text: prompt }];
+    }
+    
+    // 为 gpt-image-2 添加固定后缀，确保返回干净结果
+    if (messageContent.length > 0) {
+      var lastItem = messageContent[messageContent.length - 1];
+      if (lastItem.type === 'text') {
+        lastItem.text = lastItem.text + '\n\nGenerate exactly one image asset. Return only the image result.';
+      }
     }
     
     let resp;
@@ -826,6 +841,7 @@ async function callImageAPI(prompt, refImages = [], currentImage = null) {
         body: JSON.stringify({
           model: cfg.model,
           messages: [{ role: 'user', content: messageContent }],
+          size: '1536x1024',
         }),
       });
     } catch (fetchErr) {
@@ -835,8 +851,12 @@ async function callImageAPI(prompt, refImages = [], currentImage = null) {
       const errText = await resp.text();
       throw new Error('图片API请求失败(' + resp.status + '): ' + errText.substring(0, 200));
     }
-    const data = await resp.json();
-    const msgContent = data.choices?.[0]?.message?.content;
+    const d = await resp.json();
+    // 标准返回格式（文档推荐优先读取）：data[].url
+    if (d.data && Array.isArray(d.data) && d.data.length > 0 && d.data[0].url) {
+      return d.data[0].url;
+    }
+    const msgContent = d.choices?.[0]?.message?.content;
     
     // gpt-image style: content is an array with image objects
     if (Array.isArray(msgContent)) {
@@ -881,7 +901,7 @@ async function callImageAPI(prompt, refImages = [], currentImage = null) {
       // Maybe the whole content is a URL
       if (msgContent.trim().startsWith('http')) return msgContent.trim();
     }
-    throw new Error('无法从响应中提取图片，响应结构: ' + JSON.stringify(data).substring(0, 800));
+    throw new Error('无法从响应中提取图片，响应结构: ' + JSON.stringify(d).substring(0, 800));
   } else {
     // Use images/generations endpoint
     let baseUrl = cfg.baseUrl.replace(/\/+$/, '');
@@ -2413,10 +2433,7 @@ async function regenerateImage() {
   const scriptBlock = state.script.blocks[currentEditIdx];
   const basePrompt = buildSlidePrompt(designBlock, scriptBlock);
   // 编辑模式下：提供原图作为参考，要求 AI 在原图基础上局部修改
-  const newPrompt = '【编辑模式】请基于上方提供的当前图片进行修改。\n' +
-    '只修改用户指定的元素，保持其他所有元素的构图、布局、配色、文字内容完全不变。\n\n' +
-    '原始设计参考（用于理解设计意图）：\n' + basePrompt + '\n\n' +
-    '用户修改要求：\n' + userMsg;
+  const newPrompt = userMsg + '\n\nModify the provided image as instructed above. Keep all other elements including layout, colors, and any existing text completely unchanged.';
 
   chat.innerHTML += '<div class="text-[#737373]">生成中...</div>';
 
