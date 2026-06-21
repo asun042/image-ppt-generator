@@ -1297,22 +1297,6 @@ async function batchGenerateImages() {
 }
 
 // Batch confirm for images
-function batchConfirmImages() {
-  const sel = selectionState.step4;
-  if (sel.size === 0) return;
-  const count = sel.size;
-  for (const idx of sel) {
-    const item = state.images.items[idx];
-    if (item && (item.imageBase64 || item.imageUrl)) {
-      item.confirmed = true;
-    }
-  }
-  state.images.generated = state.images.items.every(item => item.confirmed);
-  sel.clear();
-  saveState();
-  renderStep4();
-  showToast('已确认 ' + count + ' 张图片', 'success');
-}
 
 function deleteImageItem(idx) {
   if (!confirm('确定删除这一页图片吗？')) return;
@@ -2180,7 +2164,6 @@ function renderStep4() {
         imageUrl: '',
         imageBase64: '',
         prompt: buildSlidePrompt(b, scriptBlock),
-        confirmed: false,
         error: '',
       };
     });
@@ -2212,13 +2195,13 @@ function renderImageBlocks() {
           <input type="checkbox" id="step4-chk-${idx}" ${checked} onchange="toggleSelect('step4', ${idx})" class="w-4 h-4 rounded border-[#D4D4D4] cursor-pointer" />
           <span class="inline-flex items-center justify-center w-8 h-6 bg-[#0A0A0A] text-white text-xs font-mono rounded">P${idx + 1}</span>
           <span class="text-sm font-medium">${escapeHtml(designBlock?.title || scriptBlock?.title || '未命名')}</span>
-          ${item.confirmed ? '<span class="text-xs text-[#16A34A]">✓ 已确认</span>' : ''}
+          ${imgSrc ? '<span class="text-xs text-[#16A34A]">已生成</span>' : ''}
         </div>
         <div class="flex items-center gap-2">
           <button onclick="generateSingleImage(${idx})" class="text-xs px-3 py-1 border border-[#E5E5E5] rounded hover:bg-[#F5F5F5] transition-colors">${imgSrc ? '重新生成' : '生成'}</button>
           ${imgSrc ? `<button onclick="openImageEdit(${idx})" class="text-xs text-[#2563EB] hover:underline">编辑</button>` : ''}
-          ${imgSrc && !item.confirmed ? `<button onclick="confirmImage(${idx})" class="text-xs text-[#16A34A] hover:underline">确认</button>` : ''}
-          <button onclick="deleteImageItem(${idx})" class="text-xs text-[#DC2626] hover:underline">删除</button>
+          ${imgSrc ? `<button onclick="clearImageItem(${idx})" class="text-xs text-[#DC2626] hover:underline">清空</button>` : ''}
+          <button onclick="deleteImageItem(${idx})" class="text-xs text-[#DC2626] hover:underline font-medium">删除此页</button>
         </div>
       </div>
       ${imgSrc ? `
@@ -2307,7 +2290,6 @@ async function generateSingleImage(idx) {
       item.imageUrl = imageUrl;
       item.imageBase64 = '';
     }
-    item.confirmed = false;
     saveState();
     renderImageBlocks();
     showToast('P' + (idx + 1) + ' 图片生成成功', 'success');
@@ -2321,7 +2303,7 @@ async function generateSingleImage(idx) {
 
 async function generateAllImages() {
   // 重新生成时清除图片数据
-  state.images.items.forEach(item => { item.imageUrl = ''; item.imageBase64 = ''; item.confirmed = false; });
+  state.images.items.forEach(function(item) { item.imageUrl = ''; item.imageBase64 = ''; });
   saveState();
 
   const btn = document.getElementById('genImagesBtn');
@@ -2390,13 +2372,7 @@ function resetImagePrompt(idx) {
   showToast('已重置为设计稿版本', 'info');
 }
 
-function confirmImage(idx) {
-  state.images.items[idx].confirmed = true;
-  state.images.generated = state.images.items.every(item => item.confirmed);
-  saveState();
-  renderImageBlocks();
-  document.getElementById('step4Next').disabled = !state.images.generated;
-}
+
 
 function openImageEdit(idx) {
   currentEditIdx = idx;
@@ -2479,8 +2455,7 @@ function confirmImageEdit() {
     item.imageUrl = tempImageUrl;
     item.imageBase64 = '';
   }
-  item.confirmed = true;
-  state.images.generated = state.images.items.every(i => i.confirmed);
+  state.images.generated = state.images.items.every(function(i) { return i.imageBase64 || i.imageUrl; });
   saveState();
   closeImageEdit();
   renderImageBlocks();
