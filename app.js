@@ -2559,9 +2559,11 @@ async function exportPPTX(withNotes) {
     const dbMap = new Map();
     dbImages.forEach(function(img) { dbMap.set(img.id, img); });
 
+    var pageDetails = [];
     for (let i = 0; i < state.images.items.length; i++) {
       const item = state.images.items[i];
-      statusEl.textContent = '正在处理第 ' + (i + 1) + '/' + state.images.items.length + ' 页...';
+      const baseStatus = '正在处理第 ' + (i + 1) + '/' + state.images.items.length + ' 页...';
+      statusEl.textContent = baseStatus;
       const designBlock = item.designBlockId
         ? state.design.blocks.find(b => b.id === item.designBlockId)
         : state.design.blocks[i];
@@ -2617,6 +2619,7 @@ async function exportPPTX(withNotes) {
         }
       }
 
+      pageDetails.push('P' + (i + 1) + ': ' + (imgData ? '已添加(' + imgData.substring(0, 15) + '...)' : '空白（无图片数据）'));
       if (imgData) {
         // Compress to JPEG 88% quality to reduce PPTX file size
         var compressedData = imgData;
@@ -2647,7 +2650,7 @@ async function exportPPTX(withNotes) {
 
     const filename = 'presentation' + (withNotes ? '-with-notes' : '') + '.pptx';
     await pptx.writeFile({ fileName: filename });
-    statusEl.textContent = 'PPTX文件已生成！';
+    statusEl.innerHTML = 'PPTX文件已生成！<br><span style="font-size:11px;color:#737373">' + pageDetails.join(' | ') + '</span>';
     showToast('导出成功！', 'success');
   } catch (e) {
     console.error('Export error:', e);
