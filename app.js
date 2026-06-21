@@ -1298,6 +1298,18 @@ async function batchGenerateImages() {
 
 // Batch confirm for images
 
+function clearImageItem(idx) {
+  state.images.items[idx].imageUrl = '';
+  state.images.items[idx].imageBase64 = '';
+  state.images.generated = state.images.items.every(function(it) { return it.imageBase64 || it.imageUrl; });
+  saveState();
+  renderImageBlocks();
+  
+  // Update next button
+  var nextBtn = document.getElementById('step4Next');
+  if (nextBtn) nextBtn.disabled = !state.images.generated;
+}
+
 function deleteImageItem(idx) {
   if (!confirm('确定删除这一页图片吗？')) return;
   state.images.items.splice(idx, 1);
@@ -2122,6 +2134,11 @@ function renderStep4() {
   const imgStatus = document.getElementById('imageGenStatus');
   if (imgStatus && state.images.generated) imgStatus.textContent = '';
   
+  // 根据实际图片数据同步生成状态
+  if (state.images.items.length > 0) {
+    state.images.generated = state.images.items.every(function(item) { return item.imageBase64 || item.imageUrl; });
+  }
+  
   const nextBtn = document.getElementById('step4Next');
   nextBtn.disabled = !state.images.generated;
 
@@ -2200,8 +2217,8 @@ function renderImageBlocks() {
         <div class="flex items-center gap-2">
           <button onclick="generateSingleImage(${idx})" class="text-xs px-3 py-1 border border-[#E5E5E5] rounded hover:bg-[#F5F5F5] transition-colors">${imgSrc ? '重新生成' : '生成'}</button>
           ${imgSrc ? `<button onclick="openImageEdit(${idx})" class="text-xs text-[#2563EB] hover:underline">编辑</button>` : ''}
-          ${imgSrc ? `<button onclick="clearImageItem(${idx})" class="text-xs text-[#DC2626] hover:underline">清空</button>` : ''}
-          <button onclick="deleteImageItem(${idx})" class="text-xs text-[#DC2626] hover:underline font-medium">删除此页</button>
+          ${imgSrc ? `<button onclick="clearImageItem(${idx})" class="text-xs text-[#737373] hover:underline">清空</button>` : ''}
+          <button onclick="deleteImageItem(${idx})" class="text-xs text-[#DC2626] hover:underline">删除此页</button>
         </div>
       </div>
       ${imgSrc ? `
@@ -2290,8 +2307,14 @@ async function generateSingleImage(idx) {
       item.imageUrl = imageUrl;
       item.imageBase64 = '';
     }
+    state.images.generated = state.images.items.every(function(it) { return it.imageBase64 || it.imageUrl; });
     saveState();
     renderImageBlocks();
+    
+    // Update next button
+    var nextBtn = document.getElementById('step4Next');
+    if (nextBtn) nextBtn.disabled = !state.images.generated;
+    
     showToast('P' + (idx + 1) + ' 图片生成成功', 'success');
   } catch (e) {
     item.error = e.message;
