@@ -1312,7 +1312,17 @@ function clearImageItem(idx) {
 
 function deleteImageItem(idx) {
   if (!confirm('确定删除这一页图片吗？')) return;
+  const item = state.images.items[idx];
+  const designBlockId = item?.designBlockId;
+  
+  // Remove from images
   state.images.items.splice(idx, 1);
+  
+  // Also remove the corresponding design block
+  if (designBlockId) {
+    state.design.blocks = state.design.blocks.filter(b => b.id !== designBlockId);
+  }
+  
   selectionState.step4.clear();
   saveState();
   renderStep4();
@@ -1323,8 +1333,15 @@ function batchDeleteImages() {
   if (sel.size === 0) return;
   if (!confirm(`确定删除选中的 ${sel.size} 页图片吗？`)) return;
   const indices = Array.from(sel).sort((a, b) => b - a);
+  const removedDesignIds = [];
   for (const idx of indices) {
+    const item = state.images.items[idx];
+    if (item?.designBlockId) removedDesignIds.push(item.designBlockId);
     state.images.items.splice(idx, 1);
+  }
+  // Also remove corresponding design blocks
+  if (removedDesignIds.length > 0) {
+    state.design.blocks = state.design.blocks.filter(b => !removedDesignIds.includes(b.id));
   }
   sel.clear();
   saveState();
