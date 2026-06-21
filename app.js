@@ -2435,30 +2435,36 @@ async function regenerateImage() {
   // 编辑模式下：提供原图作为参考，要求 AI 在原图基础上局部修改
   const newPrompt = userMsg + '\n\nModify the provided image as instructed above. Keep all other elements including layout, colors, and any existing text completely unchanged.';
 
-  chat.innerHTML += '<div class="text-[#737373]">生成中...</div>';
+  var _statusEl = document.createElement('div');
+  _statusEl.className = 'text-[#737373]';
+  _statusEl.textContent = '生成中...';
+  chat.appendChild(_statusEl);
+  chat.scrollTop = chat.scrollHeight;
 
   try {
-    let imageUrl = await callImageAPI(newPrompt, state.characterRefImages, tempImageUrl);
+    var imageUrl = await callImageAPI(newPrompt, state.characterRefImages, tempImageUrl);
     // Convert remote URL to base64 via proxy for reliable preview & export
     if (!imageUrl.startsWith('data:')) {
       try {
-        const dlResp = await fetch('/api/download-image', {
+        var dlResp = await fetch('/api/download-image', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ imageUrl }),
         });
         if (dlResp.ok) {
-          const dlData = await dlResp.json();
+          var dlData = await dlResp.json();
           if (dlData.dataUrl) imageUrl = dlData.dataUrl;
         }
       } catch (_) {}
     }
     tempImageUrl = imageUrl;
     document.getElementById('imageEditPreview').src = tempImageUrl;
-    chat.innerHTML += '<div class="text-[#16A34A]">图片已生成，请确认或继续调整</div>';
+    _statusEl.className = 'text-[#16A34A]';
+    _statusEl.textContent = '图片已生成，请确认或继续调整';
     item.prompt = newPrompt;
   } catch (e) {
-    chat.innerHTML += `<div class="text-[#DC2626]">生成失败: ${escapeHtml(e.message)}</div>`;
+    _statusEl.className = 'text-[#DC2626]';
+    _statusEl.textContent = '生成失败: ' + escapeHtml(e.message);
   }
   chat.scrollTop = chat.scrollHeight;
 }
