@@ -201,6 +201,8 @@ function saveState() {
       })),
       generated: state.images.generated,
     };
+    console.log('saveState: images.items.length=' + stateCopy.images.items.length + ' generated=' + stateCopy.images.generated,
+      stateCopy.images.items.map(function(it, i) { return 'P'+(i+1)+':base64='+(it.imageBase64?it.imageBase64.substring(0,20)+'...':'empty')+':url='+(it.imageUrl||'empty'); }));
     localStorage.setItem(STATE_KEY, JSON.stringify(stateCopy));
   } catch (e) {
     console.warn('Failed to save state:', e);
@@ -2175,6 +2177,9 @@ function renderStep4() {
   const needsRebuild = designBlocks.length !== oldItems.length || 
     designBlocks.some((b, i) => !oldItems[i] || oldItems[i].designBlockId !== b.id);
   
+  console.log('renderStep4: needsRebuild=' + needsRebuild + ' designLen=' + designBlocks.length + ' itemsLen=' + oldItems.length,
+    oldItems.map(function(it, i) { return 'P'+(i+1)+':id='+it.id+':dbid='+it.designBlockId+':hasImg='+!!(it.imageBase64||it.imageUrl); }));
+  
   if (needsRebuild) {
     state.images.items = designBlocks.map((b, i) => {
       const existing = existingMap.get(b.id);
@@ -2325,6 +2330,7 @@ async function generateSingleImage(idx) {
       item.imageUrl = imageUrl;
       item.imageBase64 = '';
     }
+    console.log('Gen P' + (idx + 1) + ': base64=' + (item.imageBase64 ? item.imageBase64.substring(0, 50) + '...' : 'empty') + ' url=' + (item.imageUrl || 'empty') + ' id=' + item.id);
     state.images.generated = state.images.items.every(function(it) { return it.imageBase64 || it.imageUrl; });
     saveState();
     renderImageBlocks();
@@ -2566,6 +2572,15 @@ async function exportPPTX(withNotes) {
       const slide = pptx.addSlide();
 
       // Add image - should be base64 already
+      // DEBUG: log item data
+      console.log('Export page ' + (i + 1) + ':', JSON.stringify({
+        id: item.id,
+        designBlockId: item.designBlockId,
+        hasBase64: !!(item.imageBase64),
+        base64Len: (item.imageBase64 || '').length,
+        hasUrl: !!(item.imageUrl),
+        urlLen: (item.imageUrl || '').length
+      }));
       let imgData = item.imageBase64 || item.imageUrl;
 
       // Fallback: try IndexedDB if in-memory item has no image
