@@ -2178,9 +2178,10 @@ function renderStep4() {
   if (needsRebuild) {
     state.images.items = designBlocks.map((b, i) => {
       const existing = existingMap.get(b.id);
-      if (existing && (existing.imageBase64 || existing.imageUrl)) {
-        // Preserve existing item with its generated image
-        // Ensure scriptBlockId is up-to-date from designBlock
+      if (existing) {
+        // Preserve existing item - keep all data including potentially empty image fields
+        // (image data may be in IndexedDB and restored separately, don't clear it)
+        existing.pageNumber = i + 1;
         if (!existing.scriptBlockId && b.scriptBlockId) {
           existing.scriptBlockId = b.scriptBlockId;
         }
@@ -2507,6 +2508,25 @@ function renderStep5() {
   document.getElementById('exportStatus').textContent = '';
 }
 
+
+// ---- JPEG 压缩 ----
+function compressToJPEG(dataUrl, quality) {
+  quality = quality || 0.88;
+  return new Promise(function(resolve, reject) {
+    var img = new Image();
+    img.onload = function() {
+      var canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = function() { resolve(dataUrl); }; // Fallback to original on error
+    img.src = dataUrl;
+  });
+}
+
 async function exportPPTX(withNotes) {
   const statusEl = document.getElementById('exportStatus');
   const btnId = withNotes ? 'exportWithNotes' : 'exportNoNotes';
@@ -2523,8 +2543,19 @@ async function exportPPTX(withNotes) {
     const pptx = new PptxGen();
     pptx.layout = 'LAYOUT_WIDE'; // 13.33 x 7.5
 
+    // Pre-load IndexedDB images for fallback
+    let dbImages = [];
+    try {
+      dbImages = await loadImagesFromDB();
+    } catch (e) {
+      console.warn('Failed to load images from IndexedDB for export:', e);
+    }
+    const dbMap = new Map();
+    dbImages.forEach(function(img) { dbMap.set(img.id, img); });
+
     for (let i = 0; i < state.images.items.length; i++) {
       const item = state.images.items[i];
+      statusEl.textContent = '正在处理第 ' + (i + 1) + '/' + state.images.items.length + ' 页...';
       const designBlock = item.designBlockId
         ? state.design.blocks.find(b => b.id === item.designBlockId)
         : state.design.blocks[i];
@@ -2536,6 +2567,18 @@ async function exportPPTX(withNotes) {
 
       // Add image - should be base64 already
       let imgData = item.imageBase64 || item.imageUrl;
+
+      // Fallback: try IndexedDB if in-memory item has no image
+      if (!imgData) {
+        const dbItem = dbMap.get(item.id);
+        if (dbItem) {
+          imgData = dbItem.imageBase64 || dbItem.imageUrl;
+          if (imgData) {
+            item.imageBase64 = dbItem.imageBase64 || '';
+            item.imageUrl = dbItem.imageUrl || '';
+          }
+        }
+      }
 
       // If still a remote URL (shouldn't happen), try proxy download
       if (imgData && !imgData.startsWith('data:')) {
@@ -2560,7 +2603,23 @@ async function exportPPTX(withNotes) {
       }
 
       if (imgData) {
-        slide.addImage({ data: imgData, x: 0, y: 0, w: 13.33, h: 7.5 });
+        // Compress to JPEG 88% quality to reduce PPTX file size
+        var compressedData = imgData;
+        try {
+          if (imgData.startsWith('data:image/png') || imgData.startsWith('data:image/') && !imgData.startsWith('data:image/jpeg')) {
+            compressedData = await compressToJPEG(imgData, 0.88);
+          } else if (imgData.startsWith('data:image/jpeg')) {
+            // Re-encode existing JPEG to target quality
+            compressedData = await compressToJPEG(imgData, 0.88);
+          }
+          // Update item with compressed version for future use
+          item.imageBase64 = compressedData;
+          item.imageUrl = '';
+        } catch (e) {
+          console.warn('Image compression failed, using original:', e);
+          compressedData = imgData;
+        }
+        slide.addImage({ data: compressedData, x: 0, y: 0, w: 13.33, h: 7.5 });
       }
 
       // Add speaker notes - build from design + script info for this specific page
