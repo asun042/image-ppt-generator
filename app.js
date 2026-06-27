@@ -110,10 +110,14 @@ async function saveAllImagesToDB() {
     const db = await openImagesDB();
     const tx = db.transaction(IMAGES_STORE, 'readwrite');
     const store = tx.objectStore(IMAGES_STORE);
-    state.images.items.forEach(item => store.put(item));
+    console.log('[saveAllImagesToDB] saving ' + state.images.items.length + ' items:');
+    state.images.items.forEach(function(item, i) {
+      console.log('  P'+(i+1)+': id='+item.id+' hasBase64='+!!(item.imageBase64)+' hasUrl='+!!(item.imageUrl));
+      store.put(item);
+    });
     // Wait for transaction to complete before returning
     return new Promise((resolve, reject) => {
-      tx.oncomplete = () => resolve();
+      tx.oncomplete = () => { console.log('[saveAllImagesToDB] done'); resolve(); };
       tx.onerror = () => reject(tx.error);
     });
   } catch (e) {
@@ -2512,6 +2516,8 @@ async function confirmImageEdit() {
   if (currentEditIdx < 0) return;
   const item = state.images.items[currentEditIdx];
   
+  console.log('[confirmImageEdit] idx=' + currentEditIdx + ' item.id=' + item.id + ' item.designBlockId=' + item.designBlockId + ' tempImageUrl=' + (tempImageUrl ? tempImageUrl.substring(0, 50) : 'empty'));
+  
   // 确保图片是base64格式：如果是远程URL，尝试转换为base64
   let finalImageUrl = tempImageUrl;
   if (!tempImageUrl.startsWith('data:')) {
@@ -2616,14 +2622,7 @@ async function exportPPTX(withNotes) {
 
       // Add image - should be base64 already
       // DEBUG: log item data
-      console.log('Export page ' + (i + 1) + ':', JSON.stringify({
-        id: item.id,
-        designBlockId: item.designBlockId,
-        hasBase64: !!(item.imageBase64),
-        base64Len: (item.imageBase64 || '').length,
-        hasUrl: !!(item.imageUrl),
-        urlLen: (item.imageUrl || '').length
-      }));
+      console.log('[Export] P' + (i+1) + ': id=' + item.id + ' designBlockId=' + item.designBlockId + ' hasBase64=' + !!(item.imageBase64) + ' base64Len=' + (item.imageBase64||'').length + ' hasUrl=' + !!(item.imageUrl) + ' url=' + (item.imageUrl||'none').substring(0,50));
       let imgData = item.imageBase64 || item.imageUrl;
 
       // Fallback: try IndexedDB if in-memory item has no image
