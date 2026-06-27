@@ -168,7 +168,14 @@ async function loadImagesFromDB() {
     const store = tx.objectStore(IMAGES_STORE);
     return new Promise((resolve) => {
       const req = store.getAll();
-      req.onsuccess = () => resolve(req.result || []);
+      req.onsuccess = () => {
+        const results = req.result || [];
+        console.log('[loadImagesFromDB] loaded ' + results.length + ' items:');
+        results.forEach(function(item, i) {
+          console.log('  DB['+i+']: id='+item.id+' hasBase64='+!!(item.imageBase64)+' hasUrl='+!!(item.imageUrl));
+        });
+        resolve(results);
+      };
       req.onerror = () => resolve([]);
     });
   } catch (e) {
