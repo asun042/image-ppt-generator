@@ -31,17 +31,16 @@ function getMimeType(filePath) {
 function serveStatic(req, res) {
   let filePath = new URL(req.url, 'http://localhost').pathname;
   if (filePath === '/') filePath = '/index.html';
-  
+
   const fullPath = path.join(STATIC_DIR, filePath);
   const safePath = fullPath.startsWith(STATIC_DIR) ? fullPath : null;
-  
+
   if (!safePath || !fs.existsSync(safePath)) {
     res.writeHead(404, { 'Content-Type': 'text/plain' });
     res.end('Not Found');
     return;
   }
 
-  // Don't serve server.js or .coze
   if (safePath.endsWith('server.js') || safePath.endsWith('.coze')) {
     res.writeHead(403, { 'Content-Type': 'text/plain' });
     res.end('Forbidden');
@@ -62,6 +61,42 @@ function serveStatic(req, res) {
   });
 }
 
+// Follow redirects when downloading
+function downloadWithRedirects(imageUrl, redirectCount = 0) {
+  return new Promise((resolve, reject) => {
+    try {
+      const parsedUrl = new URL(imageUrl);
+      const isHttps = parsedUrl.protocol === 'https:';
+      const options = {
+        hostname: parsedUrl.hostname,
+        port: parsedUrl.port || (isHttps ? 443 : 80),
+        path: parsedUrl.pathname + parsedUrl.search,
+        method: 'GET',
+        headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'image/*,*/*' },
+      };
+      const mod = isHttps ? https : http;
+      const req = mod.request(options, (res) => {
+        // Follow up to 5 redirects
+        if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
+          if (redirectCount >= 5) { reject(new Error('Too many redirects')); return; }
+          const redirectUrl = new URL(res.headers.location, imageUrl).href;
+          downloadWithRedirects(redirectUrl, redirectCount + 1).then(resolve).catch(reject);
+          return;
+        }
+        const chunks = [];
+        res.on('data', chunk => chunks.push(chunk));
+        res.on('end', () => {
+          const buffer = Buffer.concat(chunks);
+          const contentType = res.headers['content-type'] || 'image/png';
+          resolve({ buffer, contentType });
+        });
+      });
+      req.on('error', reject);
+      req.end();
+    } catch (e) { reject(e); }
+  });
+}
+
 // Proxy API requests
 function proxyRequest(req, res) {
   let body = '';
@@ -77,7 +112,6 @@ function proxyRequest(req, res) {
         return;
       }
 
-      // Parse target URL using WHATWG URL API
       const parsedUrl = new URL(targetUrl);
       const isHttps = parsedUrl.protocol === 'https:';
       const options = {
@@ -88,7 +122,6 @@ function proxyRequest(req, res) {
         headers: {},
       };
 
-      // Forward headers (sanitize)
       if (headers) {
         const safeHeaders = ['content-type', 'authorization', 'x-api-key', 'anthropic-version', 'anthropic-dangerous-direct-browser-access', 'accept'];
         for (const [key, value] of Object.entries(headers)) {
@@ -98,7 +131,6 @@ function proxyRequest(req, res) {
         }
       }
 
-      // Set content-length
       const reqBody = requestBody ? JSON.stringify(requestBody) : '';
       if (reqBody) {
         options.headers['Content-Type'] = options.headers['Content-Type'] || 'application/json';
@@ -107,19 +139,15 @@ function proxyRequest(req, res) {
 
       const proxyModule = isHttps ? https : http;
       const proxyReq = proxyModule.request(options, (proxyRes) => {
-        // Collect response body
         let responseBody = '';
         proxyRes.on('data', chunk => { responseBody += chunk; });
         proxyRes.on('end', () => {
-          // Forward response headers
           const resHeaders = {};
           for (const [key, value] of Object.entries(proxyRes.headers)) {
-            // Skip CORS and security headers that might conflict
             if (!['access-control-allow-origin', 'access-control-allow-credentials'].includes(key.toLowerCase())) {
               resHeaders[key] = value;
             }
           }
-          // Add CORS headers for browser
           resHeaders['Access-Control-Allow-Origin'] = '*';
           resHeaders['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS';
           resHeaders['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, x-api-key, anthropic-version';
@@ -131,22 +159,14 @@ function proxyRequest(req, res) {
 
       proxyReq.on('error', (err) => {
         console.error('Proxy error:', err.message);
-        res.writeHead(502, { 
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-        });
+        res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
         res.end(JSON.stringify({ error: `Proxy error: ${err.message}` }));
       });
 
-      if (reqBody) {
-        proxyReq.write(reqBody);
-      }
+      if (reqBody) proxyReq.write(reqBody);
       proxyReq.end();
     } catch (err) {
-      res.writeHead(400, { 
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-      });
+      res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
       res.end(JSON.stringify({ error: `Parse error: ${err.message}` }));
     }
   });
@@ -154,7 +174,6 @@ function proxyRequest(req, res) {
 
 // Main server
 const server = http.createServer((req, res) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
       'Access-Control-Allow-Origin': '*',
@@ -166,17 +185,16 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Proxy endpoint
   if (req.method === 'POST' && req.url === '/api/proxy') {
     proxyRequest(req, res);
     return;
   }
 
-  // Image download proxy - downloads binary image and returns base64
+  // Image download proxy - follows redirects to get actual image bytes
   if (req.method === 'POST' && req.url === '/api/download-image') {
     let body = '';
     req.on('data', chunk => { body += chunk; });
-    req.on('end', () => {
+    req.on('end', async () => {
       try {
         const { imageUrl } = JSON.parse(body);
         if (!imageUrl) {
@@ -184,47 +202,19 @@ const server = http.createServer((req, res) => {
           res.end(JSON.stringify({ error: 'Missing imageUrl' }));
           return;
         }
-        const parsedUrl = new URL(imageUrl);
-        const isHttps = parsedUrl.protocol === 'https:';
-        const options = {
-          hostname: parsedUrl.hostname,
-          port: parsedUrl.port || (isHttps ? 443 : 80),
-          path: parsedUrl.pathname + parsedUrl.search,
-          method: 'GET',
-          headers: { 'User-Agent': 'Mozilla/5.0' },
-        };
-        const proxyModule = isHttps ? https : http;
-        const proxyReq = proxyModule.request(options, (proxyRes) => {
-          const chunks = [];
-          proxyRes.on('data', chunk => { chunks.push(chunk); });
-          proxyRes.on('end', () => {
-            const buffer = Buffer.concat(chunks);
-            const contentType = proxyRes.headers['content-type'] || 'image/png';
-            const base64 = buffer.toString('base64');
-            res.writeHead(200, {
-              'Content-Type': 'application/json',
-              'Access-Control-Allow-Origin': '*',
-            });
-            res.end(JSON.stringify({
-              dataUrl: `data:${contentType};base64,${base64}`,
-              size: buffer.length,
-            }));
-          });
-        });
-        proxyReq.on('error', (err) => {
-          res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-          res.end(JSON.stringify({ error: `Download failed: ${err.message}` }));
-        });
-        proxyReq.end();
+        const { buffer, contentType } = await downloadWithRedirects(imageUrl);
+        const base64 = buffer.toString('base64');
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ dataUrl: `data:${contentType};base64,${base64}`, size: buffer.length }));
       } catch (err) {
-        res.writeHead(400, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
-        res.end(JSON.stringify({ error: `Parse error: ${err.message}` }));
+        console.error('Image download failed:', err.message);
+        res.writeHead(502, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+        res.end(JSON.stringify({ error: `Download failed: ${err.message}` }));
       }
     });
     return;
   }
 
-  // Static files
   serveStatic(req, res);
 });
 

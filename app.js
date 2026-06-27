@@ -2468,6 +2468,23 @@ function closeImageEdit() {
   currentEditIdx = -1;
 }
 
+// URL转base64辅助函数
+function urlToBase64(url) {
+  return new Promise(function(resolve, reject) {
+    var img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = function() {
+      var canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      resolve(canvas.toDataURL('image/jpeg', 0.92));
+    };
+    img.onerror = function() { reject(new Error('Image load failed')); };
+    img.src = url;
+  });
+}
 async function regenerateImage() {
   if (currentEditIdx < 0) return;
   const input = document.getElementById('imageEditInput');
@@ -2496,16 +2513,25 @@ async function regenerateImage() {
     // Convert remote URL to base64 via proxy for reliable preview & export
     if (!imageUrl.startsWith('data:')) {
       try {
-        var dlResp = await fetch('/api/download-image', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageUrl }),
-        });
-        if (dlResp.ok) {
-          var dlData = await dlResp.json();
-          if (dlData.dataUrl) imageUrl = dlData.dataUrl;
+        if (isProxyMode()) {
+          // 代理模式：通过服务端下载图片转base64
+          try {
+            var dlResp = await fetch('/api/download-image', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ imageUrl }),
+            });
+            if (dlResp.ok) {
+              var dlData = await dlResp.json();
+              if (dlData.dataUrl) imageUrl = dlData.dataUrl;
+            }
+          } catch (_) {}
         }
-      } catch (_) {}
+        // Canvas-based fallback (works regardless of proxy/static mode)
+        if (!imageUrl.startsWith('data:')) {
+          imageUrl = await urlToBase64(imageUrl);
+        }
+      } catch (e) { console.warn('URL conversion failed:', e); }
     }
     tempImageUrl = imageUrl;
     document.getElementById('imageEditPreview').src = tempImageUrl;
@@ -2529,16 +2555,30 @@ async function confirmImageEdit() {
   let finalImageUrl = tempImageUrl;
   if (!tempImageUrl.startsWith('data:')) {
     try {
-      // 尝试通过代理下载并转换为base64
-      const dlResp = await fetch('/api/download-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageUrl: tempImageUrl }),
-      });
-      if (dlResp.ok) {
-        const dlData = await dlResp.json();
-        if (dlData.dataUrl) {
-          finalImageUrl = dlData.dataUrl;
+      if (isProxyMode()) {
+        // 代理模式：通过服务端下载图片转base64
+        try {
+          const dlResp = await fetch('/api/download-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ imageUrl: tempImageUrl }),
+          });
+          if (dlResp.ok) {
+            const dlData = await dlResp.json();
+            if (dlData.dataUrl) {
+              finalImageUrl = dlData.dataUrl;
+            }
+          }
+        } catch (e) {
+          console.warn('代理下载失败，尝试Canvas方式:', e);
+        }
+      }
+      // Canvas-based fallback (works regardless of proxy/static mode)
+      if (!finalImageUrl.startsWith('data:')) {
+        try {
+          finalImageUrl = await urlToBase64(tempImageUrl);
+        } catch (e) {
+          console.warn('Canvas转换失败:', e);
         }
       }
     } catch (e) {

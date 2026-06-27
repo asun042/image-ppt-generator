@@ -1,3 +1,33 @@
-.cozeproj/reduction
-.preview
+# macOS
 .DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# AI工具生成
+.codegraph/
+.cozeproj/
+.coze/
+
+# 本地测试/调试
+outputs/
+work/
+测试案例/
+
+# 备份文件
+*.tar.gz
+*.zip
+*.bak
+
+# 日志
+*.log
+npm-debug.log*
+
+# 临时文件
+*.tmp
+*.temp
