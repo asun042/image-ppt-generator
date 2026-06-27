@@ -2511,11 +2511,34 @@ async function regenerateImage() {
 async function confirmImageEdit() {
   if (currentEditIdx < 0) return;
   const item = state.images.items[currentEditIdx];
-  if (tempImageUrl.startsWith('data:')) {
-    item.imageBase64 = tempImageUrl;
+  
+  // 确保图片是base64格式：如果是远程URL，尝试转换为base64
+  let finalImageUrl = tempImageUrl;
+  if (!tempImageUrl.startsWith('data:')) {
+    try {
+      // 尝试通过代理下载并转换为base64
+      const dlResp = await fetch('/api/download-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageUrl: tempImageUrl }),
+      });
+      if (dlResp.ok) {
+        const dlData = await dlResp.json();
+        if (dlData.dataUrl) {
+          finalImageUrl = dlData.dataUrl;
+        }
+      }
+    } catch (e) {
+      console.warn('确认图片时转换base64失败:', e);
+    }
+  }
+  
+  if (finalImageUrl.startsWith('data:')) {
+    item.imageBase64 = finalImageUrl;
     item.imageUrl = '';
   } else {
-    item.imageUrl = tempImageUrl;
+    // 如果转换失败，保留远程URL
+    item.imageUrl = finalImageUrl;
     item.imageBase64 = '';
   }
   state.images.generated = state.images.items.every(function(i) { return i.imageBase64 || i.imageUrl; });
@@ -2659,10 +2682,12 @@ async function exportPPTX(withNotes) {
           item.imageUrl = '';
         } catch (e) {
           console.warn('Failed to convert remote image to base64:', e);
+          // 如果转换失败，清空imgData以避免添加到PPT时出错
+          imgData = '';
         }
       }
 
-      pageDetails.push('P' + (i + 1) + ': ' + (imgData ? '已添加(' + imgData.substring(0, 15) + '...)' : '空白（无图片数据）'));
+      pageDetails.push('P' + (i + 1) + ': ' + (imgData ? (imgData.startsWith('data:') ? '已添加(base64)' : '已添加(URL)') : '空白（无图片数据）'));
       if (imgData) {
         // Compress to JPEG 88% quality to reduce PPTX file size
         var compressedData = imgData;
