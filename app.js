@@ -181,9 +181,8 @@ function loadState() {
       state = { ...state, ...parsed };
       // Ensure designLanguage is never lost
       state.design = mergedDesign;
-      if (!state.design.designLanguage) {
-        state.design.designLanguage = DEFAULT_DESIGN_LANG;
-      }
+      // 刷新页面时重置设计语言为默认蓝色商务版，避免使用上次的内容
+      state.design.designLanguage = DEFAULT_DESIGN_LANG;
     }
   } catch (e) {
     console.warn('Failed to load state:', e);
