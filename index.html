@@ -233,6 +233,13 @@
           <h1 class="text-2xl font-semibold tracking-tight mb-2">图片生成</h1>
           <p class="text-[#525252]">AI生成PPT图片，可逐页调整和重新生成。</p>
         </div>
+        <!-- 生成提示 -->
+        <div class="mb-4 p-4 bg-[#FFF7ED] border border-[#FED7AA] rounded-lg text-sm text-[#9A3412] space-y-1">
+          <p class="font-medium">生成提示：</p>
+          <p>1. 为了保障生成效果，推荐配置 gpt-image-2 模型</p>
+          <p>2. 图片生成速度取决于大模型，可能需要1分钟左右</p>
+          <p>3. 过于复杂的汉字（如蔫），生成容易有错误，建议替换成更容易书写的表述</p>
+        </div>
         <!-- Generate All -->
         <div class="mb-6">
           <button onclick="generateAllImages()" id="genImagesBtn" class="px-6 py-2.5 bg-[#0A0A0A] text-white rounded-lg text-sm font-medium hover:bg-[#262626] transition-colors">生成全部图片</button>
