@@ -111,8 +111,14 @@ async function saveAllImagesToDB() {
     const tx = db.transaction(IMAGES_STORE, 'readwrite');
     const store = tx.objectStore(IMAGES_STORE);
     state.images.items.forEach(item => store.put(item));
+    // Wait for transaction to complete before returning
+    return new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
   } catch (e) {
     console.warn('Failed to save images to IndexedDB:', e);
+    return Promise.resolve();
   }
 }
 
@@ -2502,7 +2508,7 @@ async function regenerateImage() {
   chat.scrollTop = chat.scrollHeight;
 }
 
-function confirmImageEdit() {
+async function confirmImageEdit() {
   if (currentEditIdx < 0) return;
   const item = state.images.items[currentEditIdx];
   if (tempImageUrl.startsWith('data:')) {
@@ -2514,6 +2520,8 @@ function confirmImageEdit() {
   }
   state.images.generated = state.images.items.every(function(i) { return i.imageBase64 || i.imageUrl; });
   saveState();
+  // Wait for IndexedDB save to complete before closing modal
+  await saveAllImagesToDB();
   closeImageEdit();
   renderImageBlocks();
   document.getElementById('step4Next').disabled = !state.images.generated;
