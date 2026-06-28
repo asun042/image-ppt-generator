@@ -12,12 +12,16 @@
 # AI工具生成
 .codegraph/
 .cozeproj/
-.coze/
+.coze
 
 # 本地测试/调试
 outputs/
 work/
 测试案例/
+
+# 生成资源
+assets/
+public/*.tar.gz
 
 # 备份文件
 *.tar.gz
