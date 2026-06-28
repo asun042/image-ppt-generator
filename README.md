@@ -58,7 +58,7 @@ node server.js
 ├── app.js        # 应用逻辑
 ├── server.js     # 代理服务器
 ├── styles/       # 样式文件
-└── assets/       # 静态资源
+└── README.md     # 本文件
 ```
 
 ## 注意事项
