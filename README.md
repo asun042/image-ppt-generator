@@ -1,6 +1,6 @@
 # Image PPT Generator
 ## 由来
-试过很多AI和Skill做PPT Slides，但感觉效果都不够好，效果最惊艳的还是用GPT-Image-2生成图片，然后直接拼接成PPT，但是拆分脚本，每页生成图片，调整图片，拼接，压缩size，整个过程还是挺繁琐的，所以我就做了Image PPT Generator把这一套流程自动化了。
+试过很多AI大模型和Skill做PPT Slides，但感觉效果都不够好，效果最惊艳的还是用GPT-Image-2生成图片，然后直接拼接成PPT，但是拆分脚本，每页生成图片，调整图片，拼接，压缩size，整个过程还是挺繁琐的，所以我就做了这个Image PPT Generator把这一套流程自动化了。
 
 ## 简介
 基于AI的演讲PPT生成工具。从演讲底稿一键生成专业PPT，支持Word文档和文本输入，通过AI自动生成脚本拆分、设计稿和PPT图片，自动化拼接成可用PPT。
@@ -72,4 +72,4 @@ node server.js
 
 ## License
 
-MIT, create by Alan Sun
+MIT, created by Alan Sun
